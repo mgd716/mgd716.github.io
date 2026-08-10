@@ -12,8 +12,8 @@ OUTPUT_FILE = "data.json"
 
 def fetch_activities():
     """Fetches the list of all activities from Intervals.icu."""
-    url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities"
-    params = {"oldest": "2010-01-01", "newest": "2020-01-01"}
+    url = f"https://intervals.icu{ATHLETE_ID}/activities"
+    params = {"oldest": "2010-01-01", "newest": "2030-01-01"}
     
     response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
@@ -21,24 +21,29 @@ def fetch_activities():
     return response.json()
 
 def fetch_gps_stream(activity_id):
-    """Fetches latitude/longitude coordinate arrays using the verified latlng stream key."""
-    # The official endpoint to retrieve stream data as JSON
-    url = f"https://intervals.icu/api/v1/activity/{activity_id}/streams.json"
+    """Fetches and parses the unique Intervals.icu latlng stream arrays."""
+    url = f"https://intervals.icu{activity_id}/streams.json"
     
-    # Pass 'latlng' to grab the combined positional path array
-    params = {"types": "latlng"}
-    
-    response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
+    response = requests.get(url, params={"types": "latlng"}, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
         return None
         
     try:
-        data = response.json()
-        # Intervals returns streams as list objects inside a dictionary container
-        # If 'latlng' is found, it will look like: [[lat1, lng1], [lat2, lng2]...]
-        if isinstance(data, dict) and "latlng" in data:
-            return data["latlng"]
-    except Exception:
+        streams = response.json()
+        
+        # Intervals.icu returns streams as a LIST of stream blocks
+        if isinstance(streams, list):
+            for stream in streams:
+                # Find the target dictionary block labeled 'latlng'
+                if stream.get("type") == "latlng":
+                    lats = stream.get("data", [])
+                    lngs = stream.get("data2", []) # Longitudes are packed inside data2
+                    
+                    if lats and lngs:
+                        # Combine lats and lngs into [[lat1, lng1], [lat2, lng2]...]
+                        return list(zip(lats, lngs))
+    except Exception as e:
+        print(f"  └─ Parsing error for activity {activity_id}: {e}")
         return None
     return None
 
@@ -47,7 +52,7 @@ def main():
         print("Error: Missing credentials. Verify your GitHub Secrets names!")
         return
 
-    # 1. Load existing data if it exists
+    # Load existing cached progress to avoid re-downloading
     map_data = []
     existing_ids = set()
     if os.path.exists(OUTPUT_FILE):
@@ -57,9 +62,8 @@ def main():
                 if not isinstance(map_data, list):
                     map_data = []
                 existing_ids = {str(item["id"]) for item in map_data if "id" in item}
-            print(f"Loaded {len(map_data)} tracks from cache.")
+            print(f"Loaded {len(map_data)} existing tracks from file.")
         except Exception:
-            print("Cache unreadable. Starting fresh.")
             map_data = []
 
     try:
@@ -76,11 +80,11 @@ def main():
             act_date = act.get("start_date_local", "")
             act_year = act_date.split("-")[0] if act_date else "Unknown"
 
-            # SMART SKIP: If we already have this ID saved in our array, completely skip it!
+            # Skip if we already have this specific activity track mapped out
             if act_id in existing_ids:
                 continue
                 
-            print(f"[{idx+1}/{len(activities)}] Downloading NEW stream: {act_name} ({act_year})")
+            print(f"[{idx+1}/{len(activities)}] Processing NEW stream: {act_name} ({act_year})")
             coordinates = fetch_gps_stream(act_id)
             
             if coordinates:
@@ -92,14 +96,18 @@ def main():
                     "year": act_year,
                     "coordinates": coordinates
                 })
-                # Subtle break interval to prevent server spamming
-                time.sleep(0.1)
-                
-        # 2. Save the compiled results directly back to your file
+                # Prevent spamming the API too fast
+                time.sleep(0.2)
+            else:
+                # If an activity has no GPS data (stationary trainer, indoor gym, etc.)
+                # we track its ID as empty so we don't query it again on the next run
+                existing_ids.add(act_id) 
+
+        # Save the combined historical + new dataset
         with open(OUTPUT_FILE, "w") as f:
             json.dump(map_data, f, indent=2)
             
-        print(f"\nSuccess! Total tracks currently stored inside your file: {len(map_data)}. New downloads added: {new_downloads}")
+        print(f"\nSuccess! Total tracks stored inside data.json: {len(map_data)}. Newly added: {new_downloads}")
         
     except Exception as e:
         print(f"Error during execution: {e}")
