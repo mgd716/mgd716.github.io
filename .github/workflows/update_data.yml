@@ -23,9 +23,10 @@ jobs:
         
       - name: Fetch fresh data from Intervals
         env:
-          YOUR_INTERVALS_ICU_API_KEY: ${{ secrets.INTERVALS_API_KEY }}
-          YOUR_INTERVALS_ICU_ATHLETE_ID: ${{ secrets.INTERVALS_ATHLETE_ID }}
+          INTERVALS_API_KEY: ${{ secrets.INTERVALS_API_KEY }}
+          INTERVALS_ATHLETE_ID: ${{ secrets.INTERVALS_ATHLETE_ID }}
         run: python update_map.py
+
         
       - name: Commit and push changes to live site
         run: |
