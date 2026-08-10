@@ -77,8 +77,8 @@ def main():
             act_date = act.get("start_date_local", "")
             act_year = act_date.split("-")[0] if act_date else "Unknown"
             
-            if act.get("indoor") or not act.get("distance"):
-                continue
+         #   if act.get("indoor") or not act.get("distance"):
+         #       continue
 
             # Keep existing data if we already have it
             if act_id in existing_data:
