@@ -5,72 +5,144 @@
     <link rel="stylesheet" href="https://unpkg.com" />
     <script src="https://unpkg.com"></script>
     <style>
-        #map { height: 100vh; width: 100%; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: Arial, sans-serif; }
+        #map { height: 100vh; width: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* Floating Year Selector Control Box Overlay */
+        #filter-sidebar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(30, 30, 30, 0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1000;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            max-width: 200px;
+        }
+        #filter-sidebar h3 { margin-top: 0; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        #year-select {
+            width: 100%;
+            padding: 8px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        /* Style adjustments for map text popups */
+        .leaflet-popup-content-wrapper { background: #222; color: #fff; border-radius: 4px; }
+        .leaflet-popup-tip { background: #222; }
     </style>
 </head>
 <body>
 
+    <!-- Year Filtering UI Control Container -->
+    <div id="filter-sidebar">
+        <h3>Filter by Year</h3>
+        <select id="year-select" onchange="filterMapByYear()">
+            <option value="ALL">Show All Years</option>
+        </select>
+    </div>
+
     <div id="map"></div>
 
     <script>
-        // 1. Initialize the map container
-        const map = L.map('map').setView([37.7749, -122.4194], 12);
+        const map = L.map('map');
 
-        // 2. Add the dark base map layer
         L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
         }).addTo(map);
 
-        // 3. Create Layer Groups (invisible containers) for each sport type
         const layers = {
-            'Runs': L.layerGroup().addTo(map),   // .addTo(map) means checked by default
+            'Runs': L.layerGroup().addTo(map),
             'Rides': L.layerGroup().addTo(map),
             'Hikes': L.layerGroup().addTo(map),
             'Swims': L.layerGroup().addTo(map),
             'Other': L.layerGroup().addTo(map)
         };
 
-        // 4. Set up the control checkbox overlay UI in the top right corner
         L.control.layers(null, layers, { collapsed: false }).addTo(map);
 
-        // 5. Helper function to determine color AND which layer group to drop the path into
         function getSportConfig(type) {
             switch(type) {
-                case 'Run':
-                    return { color: '#ff4500', group: layers['Runs'] };
-                case 'Ride':
-                case 'VirtualRide':
-                    return { color: '#00ced1', group: layers['Rides'] };
-                case 'Hike':
-                case 'Walk':
-                    return { color: '#32cd32', group: layers['Hikes'] };
-                case 'Swim':
-                    return { color: '#1e90ff', group: layers['Swims'] };
-                default:
-                    return { color: '#ffffff', group: layers['Other'] };
+                case 'Run': return { color: '#ff4500', group: layers['Runs'] };
+                case 'Ride': case 'VirtualRide': return { color: '#00ced1', group: layers['Rides'] };
+                case 'Hike': case 'Walk': return { color: '#32cd32', group: layers['Hikes'] };
+                case 'Swim': return { color: '#1e90ff', group: layers['Swims'] };
+                default: return { color: '#ffffff', group: layers['Other'] };
             }
         }
 
-        // 6. Fetch your local Intervals.icu file
+        // Global data cache arrays to manage runtime map drawing toggles
+        let rawActivitiesCache = [];
+        let runningMapLines = [];
+
         fetch('./data.json')
             .then(response => response.json())
             .then(activities => {
-                activities.forEach(activity => {
-                    // Extract config settings for this specific activity type
-                    const config = getSportConfig(activity.type);
+                rawActivitiesCache = activities;
 
-                    // 7. Create the polyline
-                    const line = L.polyline(activity.coordinates, {
-                        color: config.color,
-                        weight: 2,
-                        opacity: 0.6
-                    });
-
-                    // 8. CRITICAL: Add the line to its respective group, NOT straight to the map
-                    line.addTo(config.group);
+                // 1. Scan data array to find all unique years dynamically and build the dropdown options
+                const years = [...new Set(activities.map(a => a.year))].sort((a,b) => b - a);
+                const dropdown = document.getElementById('year-select');
+                years.forEach(year => {
+                    if(year && year !== "Unknown") {
+                        const opt = document.createElement('option');
+                        opt.value = year;
+                        opt.textContent = year;
+                        dropdown.appendChild(opt);
+                    }
                 });
+
+                // 2. Draw initial tracks
+                drawTracks("ALL");
             })
-            .catch(err => console.error("Error loading activity coordinates:", err));
+            .catch(err => console.error("Error loading activities:", err));
+
+        // Primary map rendering engine function
+        function drawTracks(targetYear) {
+            // Clear out any old traces sitting on the map grid canvas currently
+            runningMapLines.forEach(line => line.remove());
+            runningMapLines = [];
+
+            const boundsArray = [];
+
+            rawActivitiesCache.forEach(activity => {
+                // If filtering out a target year, skip records that don't match
+                if (targetYear !== "ALL" && activity.year !== targetYear) {
+                    return;
+                }
+
+                const config = getSportConfig(activity.type);
+                const line = L.polyline(activity.coordinates, {
+                    color: config.color,
+                    weight: 2,
+                    opacity: 0.6
+                });
+
+                // CLICK POPUP: Bind your workout title name to open on user interaction clicks
+                const popupContent = `<strong>${activity.name}</strong><br><small>${activity.type} | ${activity.year}</small>`;
+                line.bindPopup(popupContent);
+
+                line.addTo(config.group);
+                runningMapLines.add ? null : runningMapLines.push(line); // track line mapping objects in local frame array
+                boundsArray.push(line.getBounds());
+            });
+
+            // Auto-recenter the map view window around whatever selected items remain active
+            if (boundsArray.length > 0) {
+                const featureGroup = L.featureGroup(runningMapLines);
+                map.fitBounds(featureGroup.getBounds());
+            }
+        }
+
+        // Dropdown selection hook trigger event function
+        function filterMapByYear() {
+            const selectedYear = document.getElementById('year-select').value;
+            drawTracks(selectedYear);
+        }
     </script>
 </body>
 </html>
