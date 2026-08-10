@@ -52,7 +52,7 @@
         }
 
         // 6. Fetch your local Intervals.icu file
-        fetch('data.json')
+        fetch('./data.json')
             .then(response => response.json())
             .then(activities => {
                 activities.forEach(activity => {
