@@ -67,8 +67,21 @@ def main():
         for idx, act in enumerate(activities):
             act_id = act.get("id")
             act_type = act.get("type")
+            act_name = act.get("name", "Untitled Activity")
+            # Extract just the 4-digit year from the start date timestamp (e.g., '2024-05-12' -> '2024')
+            act_date = act.get("start_date_local", "")
+            act_year = act_date.split("-")[0] if act_date else "Unknown"
             
             if act.get("indoor") or not act.get("distance"):
+                continue
+
+            # If we already have it, make sure it has the new name/year fields or append it
+            if act_id in existing_data:
+                cached_item = existing_data[act_id]
+                # Force-inject metadata if the older cache run missed it
+                cached_item["name"] = act_name
+                cached_item["year"] = act_year
+                map_data.append(cached_item)
                 continue
                 
             # If it's a brand new activity, download its GPS coordinates
@@ -76,10 +89,12 @@ def main():
             coordinates = fetch_gps_stream(act_id)
             new_downloads_count += 1
             
-            if coordinates and len(coordinates) > 1:
+         if coordinates and len(coordinates) > 1:
                 map_data.append({
                     "id": act_id,
                     "type": act_type,
+                    "name": act_name,
+                    "year": act_year,
                     "coordinates": coordinates
                 })
                 
