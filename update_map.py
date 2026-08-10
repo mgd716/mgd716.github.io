@@ -48,13 +48,11 @@ def main():
         return
 
     try:
-        # Load existing data from cache if it exists
         existing_data = {}
         if os.path.exists(OUTPUT_FILE):
             try:
                 with open(OUTPUT_FILE, "r") as f:
                     old_list = json.load(f)
-                    # Convert list to a dictionary lookup for blazing fast ID checking
                     existing_data = {str(item["id"]): item for item in old_list}
                 print(f"Loaded {len(existing_data)} existing activities from cache.")
             except Exception:
@@ -62,10 +60,12 @@ def main():
 
         activities = fetch_activities()
         map_data = []
-        print(f"Found {len(activities)} activities. Extracting GPS paths...")
+        new_downloads_count = 0
+        
+        print(f"Syncing entries... processing {len(activities)} activities.")
         
         for idx, act in enumerate(activities):
-            act_id = act.get("id")
+            act_id = str(act.get("id"))
             act_type = act.get("type")
             act_name = act.get("name", "Untitled Activity")
             # Extract just the 4-digit year from the start date timestamp (e.g., '2024-05-12' -> '2024')
@@ -84,12 +84,11 @@ def main():
                 map_data.append(cached_item)
                 continue
                 
-            # If it's a brand new activity, download its GPS coordinates
             print(f"✨ Found NEW activity! Downloading stream for {act_type} (ID: {act_id})...")
             coordinates = fetch_gps_stream(act_id)
             new_downloads_count += 1
             
-         if coordinates and len(coordinates) > 1:
+            if coordinates and len(coordinates) > 1:
                 map_data.append({
                     "id": act_id,
                     "type": act_type,
@@ -98,11 +97,10 @@ def main():
                     "coordinates": coordinates
                 })
                 
-        # Save the combined historical + new dataset
         with open(OUTPUT_FILE, "w") as f:
             json.dump(map_data, f, indent=2)
             
-        print(f"\nSync complete! Total tracks on map: {len(map_data)}. (Downloaded {new_downloads_count} new paths tonight).")
+        print(f"\nSync complete! Total tracks on map: {len(map_data)}. (Downloaded {new_downloads_count} new paths).")
         
     except Exception as e:
         print(f"\nError running script: {e}")
