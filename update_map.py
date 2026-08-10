@@ -13,16 +13,21 @@ OUTPUT_FILE = "data.json"
 def fetch_activities():
     """Fetches the list of all activities from Intervals.icu."""
     print("Fetching activity list...")
-    url = f"https://intervals.icu{ATHLETE_ID}/activities"
-    response = requests.get(url, auth=HTTPBasicAuth('athlete', API_KEY))
+    # Double-check that there is a strict forward slash after intervals.icu/
+    url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities"
+    
+    # Authenticate using the static username 'API_KEY' and your token
+    response = requests.get(url, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
         raise Exception(f"Failed to fetch activities: {response.status_code} - {response.text}")
     return response.json()
 
 def fetch_gps_stream(activity_id):
     """Fetches latitude/longitude coordinate arrays for a specific activity."""
-    url = f"https://intervals.icu{ATHLETE_ID}/activities/{activity_id}/streams"
-    response = requests.get(url, params={"types": "lat,lng"}, auth=HTTPBasicAuth('athlete', API_KEY))
+    # Double-check that there is a strict forward slash after intervals.icu/
+    url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities/{activity_id}/streams"
+    
+    response = requests.get(url, params={"types": "lat,lng"}, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
         return None
     data = response.json()
