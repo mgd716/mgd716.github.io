@@ -20,7 +20,7 @@ def fetch_activities():
     # 2030-01-01 covers all dates up to the future
     params = {
         "oldest": "2010-01-01",
-        "newest": "2030-01-01"
+        "newest": "2020-01-01"
     }
     
     response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
