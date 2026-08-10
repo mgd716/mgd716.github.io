@@ -19,8 +19,11 @@ def fetch_activities():
     return response.json()
 
 def fetch_gps_stream(activity_id):
-    url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities/{activity_id}/streams"
-    response = requests.get(url, params={"types": "lat,lng"}, auth=HTTPBasicAuth('API_KEY', API_KEY))
+    """Fetches latitude/longitude coordinate arrays using the correct streams endpoint."""
+    # FIXED: Corrected path layout routing directly to the target stream endpoint
+    url = f"https://intervals.icu{activity_id}/streams.json"
+    
+    response = requests.get(url, params={"types": "lat,lng"}, auth=HTTPBasicAuth('athlete', API_KEY))
     
     if response.status_code == 429:
         print("⚠️ Hitting rate limits! Saving current progress and backing off...")
