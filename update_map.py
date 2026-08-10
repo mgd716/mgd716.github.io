@@ -12,21 +12,24 @@ OUTPUT_FILE = "data.json"
 
 def fetch_activities():
     """Fetches the list of all activities from Intervals.icu."""
+    # The URL pattern uses your specific athlete ID number
     url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities"
-    params = {"oldest": "2010-01-01", "newest": "2030-01-01"}
+    params = {"oldest": "2010-01-01", "newest": "2020-01-01"}
     
-    # FIXED: Username must be your literal ATHLETE_ID string, password is the API_KEY
-    response = requests.get(url, params=params, auth=HTTPBasicAuth(ATHLETE_ID, API_KEY))
+    # CORRECT AUTH: The basic authentication username is strictly the string literal 'API_KEY'
+    response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
         raise Exception(f"Failed to fetch activities: {response.status_code} - {response.text}")
     return response.json()
 
 def fetch_gps_stream(activity_id):
-    """Fetches latitude/longitude coordinate arrays using the correct streams endpoint."""
-    url = f"https://intervals.icu/{activity_id}/streams.json"
+    """Fetches latitude/longitude coordinate arrays using the correct stream endpoint."""
+    # CORRECT URL: Must be singular 'activity' followed by '.json' extension
+    url = f"https://intervals.icu/api/v1/activity/{activity_id}/streams.json"
+    params = {"types": "lat,lng"}
     
-    # FIXED: Username must be your literal ATHLETE_ID string, password is the API_KEY
-    response = requests.get(url, params={"types": "lat,lng"}, auth=HTTPBasicAuth(ATHLETE_ID, API_KEY))
+    # CORRECT AUTH: The basic authentication username is strictly the string literal 'API_KEY'
+    response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     
     if response.status_code == 429:
         print("⚠️ Hitting rate limits! Saving current progress and backing off...")
@@ -36,6 +39,7 @@ def fetch_gps_stream(activity_id):
         
     try:
         data = response.json()
+        # Intervals returns streams as keys inside a dictionary object
         if isinstance(data, dict) and "lat" in data and "lng" in data:
             return list(zip(data["lat"], data["lng"]))
     except Exception:
@@ -44,10 +48,10 @@ def fetch_gps_stream(activity_id):
 
 def main():
     if not ATHLETE_ID or not API_KEY:
-        print("Error: Missing credentials.")
+        print("Error: Missing credentials. Verify your GitHub Secrets names!")
         return
 
-    # Load existing progress (cache)
+    # Load existing progress (cache layer)
     existing_data = {}
     if os.path.exists(OUTPUT_FILE):
         try:
@@ -106,7 +110,7 @@ def main():
                     "year": act_year,
                     "coordinates": coordinates
                 })
-                time.sleep(0.3)
+                time.sleep(0.4) # Add 400ms delay to strictly respect API bounds
 
         with open(OUTPUT_FILE, "w") as f:
             json.dump(map_data, f, indent=2)
