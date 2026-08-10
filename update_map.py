@@ -21,7 +21,7 @@ def fetch_activities():
 def fetch_gps_stream(activity_id):
     """Fetches latitude/longitude coordinate arrays using the correct streams endpoint."""
     # FIXED: Corrected path layout routing directly to the target stream endpoint
-    url = f"https://intervals.icu{activity_id}/streams.json"
+    url = f"https://intervals.icu/{activity_id}/streams.json"
     
     response = requests.get(url, params={"types": "lat,lng"}, auth=HTTPBasicAuth('athlete', API_KEY))
     
