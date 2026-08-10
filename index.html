@@ -5,10 +5,9 @@
     <link rel="stylesheet" href="https://unpkg.com" />
     <script src="https://unpkg.com"></script>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: Arial, sans-serif; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: Arial, sans-serif; background-color: #111; }
         #map { height: 100vh; width: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
         
-        /* Floating Year Selector Control Box Overlay */
         #filter-sidebar {
             position: absolute;
             top: 20px;
@@ -31,14 +30,12 @@
             border-radius: 4px;
             cursor: pointer;
         }
-        /* Style adjustments for map text popups */
         .leaflet-popup-content-wrapper { background: #222; color: #fff; border-radius: 4px; }
         .leaflet-popup-tip { background: #222; }
     </style>
 </head>
 <body>
 
-    <!-- Year Filtering UI Control Container -->
     <div id="filter-sidebar">
         <h3>Filter by Year</h3>
         <select id="year-select" onchange="filterMapByYear()">
@@ -49,7 +46,9 @@
     <div id="map"></div>
 
     <script>
-        const map = L.map('map');
+        // FIXED: Added a universal fallback starting position [0, 0] and zoom level 2 
+        // This guarantees the dark map grid loads instantly on screen before checking files
+        const map = L.map('map').setView([0, 0], 2);
 
         L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
@@ -75,17 +74,21 @@
             }
         }
 
-        // Global data cache arrays to manage runtime map drawing toggles
         let rawActivitiesCache = [];
         let runningMapLines = [];
 
         fetch('./data.json')
             .then(response => response.json())
             .then(activities => {
-                rawActivitiesCache = activities;
+                // Pre-process and clean data if years were saved as array lists
+                rawActivitiesCache = activities.map(act => {
+                    if (Array.isArray(act.year)) {
+                        act.year = act.year[0]; // Clean layout array down to a string
+                    }
+                    return act;
+                });
 
-                // 1. Scan data array to find all unique years dynamically and build the dropdown options
-                const years = [...new Set(activities.map(a => a.year))].sort((a,b) => b - a);
+                const years = [...new Set(rawActivitiesCache.map(a => a.year))].sort((a,b) => b - a);
                 const dropdown = document.getElementById('year-select');
                 years.forEach(year => {
                     if(year && year !== "Unknown") {
@@ -96,22 +99,18 @@
                     }
                 });
 
-                // 2. Draw initial tracks
                 drawTracks("ALL");
             })
             .catch(err => console.error("Error loading activities:", err));
 
-        // Primary map rendering engine function
         function drawTracks(targetYear) {
-            // Clear out any old traces sitting on the map grid canvas currently
             runningMapLines.forEach(line => line.remove());
             runningMapLines = [];
 
             const boundsArray = [];
 
             rawActivitiesCache.forEach(activity => {
-                // If filtering out a target year, skip records that don't match
-                if (targetYear !== "ALL" && activity.year !== targetYear) {
+                if (targetYear !== "ALL" && String(activity.year) !== String(targetYear)) {
                     return;
                 }
 
@@ -122,23 +121,21 @@
                     opacity: 0.6
                 });
 
-                // CLICK POPUP: Bind your workout title name to open on user interaction clicks
                 const popupContent = `<strong>${activity.name}</strong><br><small>${activity.type} | ${activity.year}</small>`;
                 line.bindPopup(popupContent);
 
                 line.addTo(config.group);
-                runningMapLines.add ? null : runningMapLines.push(line); // track line mapping objects in local frame array
+                runningMapLines.push(line);
                 boundsArray.push(line.getBounds());
             });
 
-            // Auto-recenter the map view window around whatever selected items remain active
+            // Adjust zoom dynamically only if tracks exist to prevent errors
             if (boundsArray.length > 0) {
                 const featureGroup = L.featureGroup(runningMapLines);
-                map.fitBounds(featureGroup.getBounds());
+                map.fitBounds(featureGroup.getBounds(), { padding: [30, 30] });
             }
         }
 
-        // Dropdown selection hook trigger event function
         function filterMapByYear() {
             const selectedYear = document.getElementById('year-select').value;
             drawTracks(selectedYear);
