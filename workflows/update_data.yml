@@ -1,12 +1,14 @@
 name: Daily Map Update
 on:
   schedule:
-    - cron: '0 2 * * *' # Runs automatically every single night at 2:00 AM
-  workflow_dispatch: # Allows you to manually trigger the update with a button click
+    - cron: '0 2 * * *' # Runs automatically every night at 2:00 AM UTC
+  workflow_dispatch: # Gives you a manual button to force an update anytime
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Grants the robot permission to push data updates back into your repo
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -14,7 +16,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-node-version: '3.10'
+          python-version: '3.10'
           
       - name: Install dependencies
         run: pip install requests
