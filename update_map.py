@@ -11,19 +11,22 @@ OUTPUT_FILE = "data.json"
 # =======================================================
 
 def fetch_activities():
+    """Fetches the list of all activities from Intervals.icu."""
     url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities"
-    params = {"oldest": "2010-01-01", "newest": "2020-01-01"}
-    response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
+    params = {"oldest": "2010-01-01", "newest": "2030-01-01"}
+    
+    # FIXED: Username must be your literal ATHLETE_ID string, password is the API_KEY
+    response = requests.get(url, params=params, auth=HTTPBasicAuth(ATHLETE_ID, API_KEY))
     if response.status_code != 200:
-        raise Exception(f"Failed to fetch activities: {response.status_code}")
+        raise Exception(f"Failed to fetch activities: {response.status_code} - {response.text}")
     return response.json()
 
 def fetch_gps_stream(activity_id):
     """Fetches latitude/longitude coordinate arrays using the correct streams endpoint."""
-    # FIXED: Corrected path layout routing directly to the target stream endpoint
     url = f"https://intervals.icu/{activity_id}/streams.json"
     
-    response = requests.get(url, params={"types": "lat,lng"}, auth=HTTPBasicAuth('athlete', API_KEY))
+    # FIXED: Username must be your literal ATHLETE_ID string, password is the API_KEY
+    response = requests.get(url, params={"types": "lat,lng"}, auth=HTTPBasicAuth(ATHLETE_ID, API_KEY))
     
     if response.status_code == 429:
         print("⚠️ Hitting rate limits! Saving current progress and backing off...")
@@ -31,9 +34,12 @@ def fetch_gps_stream(activity_id):
     if response.status_code != 200:
         return None
         
-    data = response.json()
-    if "lat" in data and "lng" in data:
-        return list(zip(data["lat"], data["lng"]))
+    try:
+        data = response.json()
+        if isinstance(data, dict) and "lat" in data and "lng" in data:
+            return list(zip(data["lat"], data["lng"]))
+    except Exception:
+        return None
     return None
 
 def main():
@@ -46,7 +52,7 @@ def main():
     if os.path.exists(OUTPUT_FILE):
         try:
             with open(OUTPUT_FILE, "r") as f:
-                existing_data = {str(item["id"]): item for item in json.load(f)}
+                existing_data = {str(item["id"]): item for item in json.load(f) if "id" in item}
             print(f"Loaded {len(existing_data)} tracks from cache.")
         except Exception:
             pass
@@ -63,11 +69,9 @@ def main():
             act_type = act.get("type", "Other")
             act_name = act.get("name", f"Activity {act_id}")
             
-            # FIXED: Added [0] to extract just the 4-digit year string (e.g., '2024')
             act_date = act.get("start_date_local", "")
             act_year = act_date.split("-")[0] if act_date else "Unknown"
 
-            # Re-use existing cache item if it's already completely downloaded
             if act_id in existing_data:
                 item = existing_data[act_id]
                 item["name"] = act_name
@@ -75,7 +79,6 @@ def main():
                 map_data.append(item)
                 continue
                 
-            # Rate limit buffer checkpoint (downloads ~90 tracks per workflow trigger execution)
             if new_downloads >= 90: 
                 print("Stopping loop for this run to keep API usage safe. Appending remaining cache files...")
                 for remaining_act in activities[idx:]:
@@ -103,9 +106,8 @@ def main():
                     "year": act_year,
                     "coordinates": coordinates
                 })
-                time.sleep(0.3) # Short safety pause
+                time.sleep(0.3)
 
-        # Save all results safely 
         with open(OUTPUT_FILE, "w") as f:
             json.dump(map_data, f, indent=2)
             
