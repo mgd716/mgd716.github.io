@@ -13,7 +13,7 @@ OUTPUT_FILE = "data.json"
 def fetch_activities():
     """Fetches the list of all activities from Intervals.icu."""
     url = f"https://intervals.icu{ATHLETE_ID}/activities"
-    params = {"oldest": "2010-01-01", "newest": "2030-01-01"}
+    params = {"oldest": "2010-01-01", "newest": "2020-01-01"}
     
     response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
