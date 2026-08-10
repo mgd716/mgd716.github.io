@@ -35,6 +35,9 @@ def fetch_gps_stream(activity_id):
     url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities/{activity_id}/streams"
     
     response = requests.get(url, params={"types": "lat,lng"}, auth=HTTPBasicAuth('API_KEY', API_KEY))
+    if response.status_code == 429:
+        print("⚠️ Hitting rate limits! Saving current progress and backing off...")
+        return "RATE_LIMIT"
     if response.status_code != 200:
         return None
     data = response.json()
@@ -47,48 +50,67 @@ def main():
         print("Error: Missing credentials. Check your GitHub Secrets setup!")
         return
 
+  
+# Load existing progress (cache)
+    existing_data = {}
+    if os.path.exists(OUTPUT_FILE):
+        try:
+            with open(OUTPUT_FILE, "r") as f:
+                existing_data = {str(item["id"]): item for item in json.load(f)}
+            print(f"Loaded {len(existing_data)} tracks from cache.")
+        except Exception:
+            pass
+  
     try:
-        existing_data = {}
-        if os.path.exists(OUTPUT_FILE):
-            try:
-                with open(OUTPUT_FILE, "r") as f:
-                    old_list = json.load(f)
-                    existing_data = {str(item["id"]): item for item in old_list}
-                print(f"Loaded {len(existing_data)} existing activities from cache.")
-            except Exception:
-                print("Cache file unreadable or empty. Starting fresh.")
-
         activities = fetch_activities()
         map_data = []
-        new_downloads_count = 0
+        new_downloads = 0
         
-        print(f"Syncing entries... processing {len(activities)} activities.")
+        print(f"Syncing entries against {len(activities)} activities...")
         
         for idx, act in enumerate(activities):
             act_id = str(act.get("id"))
             act_type = act.get("type")
             act_name = act.get("name", "Untitled Activity")
-            # Extract just the 4-digit year from the start date timestamp (e.g., '2024-05-12' -> '2024')
+            
+            # FIXED: Grab just the 4-digit year string correctly
             act_date = act.get("start_date_local", "")
             act_year = act_date.split("-")[0] if act_date else "Unknown"
             
             if act.get("indoor") or not act.get("distance"):
                 continue
 
-            # If we already have it, make sure it has the new name/year fields or append it
+            # Keep existing data if we already have it
             if act_id in existing_data:
-                cached_item = existing_data[act_id]
-                # Force-inject metadata if the older cache run missed it
-                cached_item["name"] = act_name
-                cached_item["year"] = act_year
-                map_data.append(cached_item)
+                item = existing_data[act_id]
+                item["name"] = act_name
+                item["year"] = act_year
+                map_data.append(item)
                 continue
                 
-            print(f"✨ Found NEW activity! Downloading stream for {act_type} (ID: {act_id})...")
+            # Rate limit mitigation pause
+            if new_downloads >= 90: 
+                print("Stopping for this run to avoid severe API bans. Saving progress...")
+                # Fill remaining array with whatever is left in cache so we don't lose old records
+                for remaining_act in activities[idx:]:
+                    rem_id = str(remaining_act.get("id"))
+                    if rem_id in existing_data:
+                        map_data.append(existing_data[rem_id])
+                break
+
+            print(f"[{idx+1}/{len(activities)}] Fetching NEW track: {act_name} ({act_year})")
             coordinates = fetch_gps_stream(act_id)
-            new_downloads_count += 1
             
-            if coordinates and len(coordinates) > 1:
+            if coordinates == "RATE_LIMIT":
+                # Inject remaining cache values to prevent erasing them
+                for remaining_act in activities[idx:]:
+                    rem_id = str(remaining_act.get("id"))
+                    if rem_id in existing_data:
+                        map_data.append(existing_data[rem_id])
+                break
+                
+            if coordinates:
+                new_downloads += 1
                 map_data.append({
                     "id": act_id,
                     "type": act_type,
@@ -96,14 +118,16 @@ def main():
                     "year": act_year,
                     "coordinates": coordinates
                 })
-                
+                time.sleep(0.5) # Short rest interval to be polite to the server
+
+        # CRITICAL: Always save data to file even on early break exits
         with open(OUTPUT_FILE, "w") as f:
             json.dump(map_data, f, indent=2)
             
-        print(f"\nSync complete! Total tracks on map: {len(map_data)}. (Downloaded {new_downloads_count} new paths).")
+        print(f"\nBatch saved! Total tracks currently stored: {len(map_data)}.")
         
     except Exception as e:
-        print(f"\nError running script: {e}")
+        print(f"Error during execution: {e}")
 
 if __name__ == "__main__":
     main()
