@@ -4,9 +4,9 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 # ==================== CONFIGURATION ====================
-# The script will now securely grab your hidden keys from GitHub's server environment
-ATHLETE_ID = os.getenv("YOUR_INTERVALS_ICU_ATHLETE_ID")
-API_KEY = os.getenv("YOUR_INTERVALS_ICU_API_KEY")
+# The script safely pulls your clean, matched names from the cloud runner
+ATHLETE_ID = os.getenv("INTERVALS_ATHLETE_ID")
+API_KEY = os.getenv("INTERVALS_API_KEY")
 OUTPUT_FILE = "data.json"
 # =======================================================
 
