@@ -12,36 +12,32 @@ OUTPUT_FILE = "data.json"
 
 def fetch_activities():
     """Fetches the list of all activities from Intervals.icu."""
-    # The URL pattern uses your specific athlete ID number
     url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities"
     params = {"oldest": "2010-01-01", "newest": "2020-01-01"}
     
-    # CORRECT AUTH: The basic authentication username is strictly the string literal 'API_KEY'
     response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
         raise Exception(f"Failed to fetch activities: {response.status_code} - {response.text}")
     return response.json()
 
 def fetch_gps_stream(activity_id):
-    """Fetches latitude/longitude coordinate arrays using the correct stream endpoint."""
-    # CORRECT URL: Must be singular 'activity' followed by '.json' extension
+    """Fetches latitude/longitude coordinate arrays using the verified latlng stream key."""
+    # The official endpoint to retrieve stream data as JSON
     url = f"https://intervals.icu/api/v1/activity/{activity_id}/streams.json"
-    params = {"types": "lat,lng"}
     
-    # CORRECT AUTH: The basic authentication username is strictly the string literal 'API_KEY'
+    # Pass 'latlng' to grab the combined positional path array
+    params = {"types": "latlng"}
+    
     response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
-    
-    if response.status_code == 429:
-        print("⚠️ Hitting rate limits! Saving current progress and backing off...")
-        return "RATE_LIMIT"
     if response.status_code != 200:
         return None
         
     try:
         data = response.json()
-        # Intervals returns streams as keys inside a dictionary object
-        if isinstance(data, dict) and "lat" in data and "lng" in data:
-            return list(zip(data["lat"], data["lng"]))
+        # Intervals returns streams as list objects inside a dictionary container
+        # If 'latlng' is found, it will look like: [[lat1, lng1], [lat2, lng2]...]
+        if isinstance(data, dict) and "latlng" in data:
+            return data["latlng"]
     except Exception:
         return None
     return None
@@ -51,22 +47,26 @@ def main():
         print("Error: Missing credentials. Verify your GitHub Secrets names!")
         return
 
-    # Load existing progress (cache layer)
-    existing_data = {}
+    # 1. Load existing data if it exists
+    map_data = []
+    existing_ids = set()
     if os.path.exists(OUTPUT_FILE):
         try:
             with open(OUTPUT_FILE, "r") as f:
-                existing_data = {str(item["id"]): item for item in json.load(f) if "id" in item}
-            print(f"Loaded {len(existing_data)} tracks from cache.")
+                map_data = json.load(f)
+                if not isinstance(map_data, list):
+                    map_data = []
+                existing_ids = {str(item["id"]) for item in map_data if "id" in item}
+            print(f"Loaded {len(map_data)} tracks from cache.")
         except Exception:
-            pass
+            print("Cache unreadable. Starting fresh.")
+            map_data = []
 
     try:
         activities = fetch_activities()
-        map_data = []
-        new_downloads = 0
+        print(f"Syncing feed against {len(activities)} total activities...")
         
-        print(f"Syncing entries against {len(activities)} activities...")
+        new_downloads = 0
         
         for idx, act in enumerate(activities):
             act_id = str(act.get("id"))
@@ -76,31 +76,13 @@ def main():
             act_date = act.get("start_date_local", "")
             act_year = act_date.split("-")[0] if act_date else "Unknown"
 
-            if act_id in existing_data:
-                item = existing_data[act_id]
-                item["name"] = act_name
-                item["year"] = act_year
-                map_data.append(item)
+            # SMART SKIP: If we already have this ID saved in our array, completely skip it!
+            if act_id in existing_ids:
                 continue
                 
-            if new_downloads >= 90: 
-                print("Stopping loop for this run to keep API usage safe. Appending remaining cache files...")
-                for remaining_act in activities[idx:]:
-                    rem_id = str(remaining_act.get("id"))
-                    if rem_id in existing_data:
-                        map_data.append(existing_data[rem_id])
-                break
-
-            print(f"[{idx+1}/{len(activities)}] Processing: {act_name} ({act_year})")
+            print(f"[{idx+1}/{len(activities)}] Downloading NEW stream: {act_name} ({act_year})")
             coordinates = fetch_gps_stream(act_id)
             
-            if coordinates == "RATE_LIMIT":
-                for remaining_act in activities[idx:]:
-                    rem_id = str(remaining_act.get("id"))
-                    if rem_id in existing_data:
-                        map_data.append(existing_data[rem_id])
-                break
-                
             if coordinates:
                 new_downloads += 1
                 map_data.append({
@@ -110,12 +92,14 @@ def main():
                     "year": act_year,
                     "coordinates": coordinates
                 })
-                time.sleep(0.4) # Add 400ms delay to strictly respect API bounds
-
+                # Subtle break interval to prevent server spamming
+                time.sleep(0.1)
+                
+        # 2. Save the compiled results directly back to your file
         with open(OUTPUT_FILE, "w") as f:
             json.dump(map_data, f, indent=2)
             
-        print(f"\nBatch saved! Total tracks currently stored: {len(map_data)}.")
+        print(f"\nSuccess! Total tracks currently stored inside your file: {len(map_data)}. New downloads added: {new_downloads}")
         
     except Exception as e:
         print(f"Error during execution: {e}")
