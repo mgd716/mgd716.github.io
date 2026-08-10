@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Permanent Map with Filters</title>
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <script src="https://unpkg.com"></script>
+    <style>
+        #map { height: 100vh; width: 100%; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <script>
+        // 1. Initialize the map container
+        const map = L.map('map').setView([37.7749, -122.4194], 12);
+
+        // 2. Add the dark base map layer
+        L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        }).addTo(map);
+
+        // 3. Create Layer Groups (invisible containers) for each sport type
+        const layers = {
+            'Runs': L.layerGroup().addTo(map),   // .addTo(map) means checked by default
+            'Rides': L.layerGroup().addTo(map),
+            'Hikes': L.layerGroup().addTo(map),
+            'Swims': L.layerGroup().addTo(map),
+            'Other': L.layerGroup().addTo(map)
+        };
+
+        // 4. Set up the control checkbox overlay UI in the top right corner
+        L.control.layers(null, layers, { collapsed: false }).addTo(map);
+
+        // 5. Helper function to determine color AND which layer group to drop the path into
+        function getSportConfig(type) {
+            switch(type) {
+                case 'Run':
+                    return { color: '#ff4500', group: layers['Runs'] };
+                case 'Ride':
+                case 'VirtualRide':
+                    return { color: '#00ced1', group: layers['Rides'] };
+                case 'Hike':
+                case 'Walk':
+                    return { color: '#32cd32', group: layers['Hikes'] };
+                case 'Swim':
+                    return { color: '#1e90ff', group: layers['Swims'] };
+                default:
+                    return { color: '#ffffff', group: layers['Other'] };
+            }
+        }
+
+        // 6. Fetch your local Intervals.icu file
+        fetch('data.json')
+            .then(response => response.json())
+            .then(activities => {
+                activities.forEach(activity => {
+                    // Extract config settings for this specific activity type
+                    const config = getSportConfig(activity.type);
+
+                    // 7. Create the polyline
+                    const line = L.polyline(activity.coordinates, {
+                        color: config.color,
+                        weight: 2,
+                        opacity: 0.6
+                    });
+
+                    // 8. CRITICAL: Add the line to its respective group, NOT straight to the map
+                    line.addTo(config.group);
+                });
+            })
+            .catch(err => console.error("Error loading activity coordinates:", err));
+    </script>
+</body>
+</html>
