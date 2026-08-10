@@ -13,14 +13,21 @@ OUTPUT_FILE = "data.json"
 def fetch_activities():
     """Fetches the list of all activities from Intervals.icu."""
     print("Fetching activity list...")
-    # Double-check that there is a strict forward slash after intervals.icu/
     url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities"
     
-    # Authenticate using the static username 'API_KEY' and your token
-    response = requests.get(url, auth=HTTPBasicAuth('API_KEY', API_KEY))
+    # Intervals.icu requires 'oldest' and 'newest' date limits (YYYY-MM-DD)
+    # 2010-01-01 ensures we fetch your entire historical timeline
+    # 2030-01-01 covers all dates up to the future
+    params = {
+        "oldest": "2010-01-01",
+        "newest": "2030-01-01"
+    }
+    
+    response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
         raise Exception(f"Failed to fetch activities: {response.status_code} - {response.text}")
     return response.json()
+
 
 def fetch_gps_stream(activity_id):
     """Fetches latitude/longitude coordinate arrays for a specific activity."""
