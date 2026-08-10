@@ -12,7 +12,7 @@ OUTPUT_FILE = "data.json"
 
 def fetch_activities():
     url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities"
-    params = {"oldest": "2010-01-01", "newest": "2030-01-01"}
+    params = {"oldest": "2010-01-01", "newest": "2020-01-01"}
     response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
         raise Exception(f"Failed to fetch activities: {response.status_code}")
