@@ -60,88 +60,92 @@
         let rawActivitiesCache = [];
         let runningMapLines = [];
         const visitedTiles = new Set(); // Stores our completed squares
+let availableYears = [];
 
-        fetch('./data.json')
+        // 1. Fetch the available years first
+        fetch('./years.json')
             .then(response => response.json())
-            .then(activities => {
-                rawActivitiesCache = activities;
-
-                // Calculate visited tiles for every activity point
-                activities.forEach(activity => {
-                    if (!activity.coordinates) return;
-                    
-                    activity.coordinates.forEach(coord => {
-                        const latlng = L.latLng(coord[0], coord[1]);
-                        
-                        // Calculate z14 (Squadrat) tile
-                        const p14 = map.project(latlng, 14);
-                        visitedTiles.add(`14_${Math.floor(p14.x / 256)}_${Math.floor(p14.y / 256)}`);
-
-                        // Calculate z17 (Squadratinho) tile
-                        const p17 = map.project(latlng, 17);
-                        visitedTiles.add(`17_${Math.floor(p17.x / 256)}_${Math.floor(p17.y / 256)}`);
-                    });
-                });
-
-                // Extract and sort unique year strings...
-                const years = [...new Set(activities.map(a => a.year))].sort((a,b) => b - a);
+            .then(years => {
+                availableYears = years.sort((a,b) => b - a);
                 const dropdown = document.getElementById('year-select');
-                years.forEach(year => {
-                    if(year && year !== "Unknown") {
-                        const opt = document.createElement('option');
-                        opt.value = year; opt.textContent = year;
-                        dropdown.appendChild(opt);
-                    }
+                
+                availableYears.forEach(year => {
+                    const opt = document.createElement('option');
+                    opt.value = year; opt.textContent = year;
+                    dropdown.appendChild(opt);
                 });
 
-                drawTracks("ALL");
+                // Load everything on initial boot
+                loadData("ALL");
             })
-            .catch(err => console.error("Error loading activities:", err));
+            .catch(err => console.error("Error loading years:", err));
 
-     function drawTracks(targetYear) {
+        // 2. Dynamic fetcher based on dropdown selection
+        function loadData(targetYear) {
+            // Clear the old data off the map
             runningMapLines.forEach(line => line.remove());
             runningMapLines = [];
+            visitedTiles.clear();
+            
+            // Figure out which files to request
+            const filesToFetch = targetYear === "ALL" 
+                ? availableYears.map(y => `./data_${y}.json`) 
+                : [`./data_${targetYear}.json`];
 
-            const allPolylines = [];
+            // Download them all in parallel
+            Promise.all(filesToFetch.map(f => fetch(f).then(res => res.json())))
+                .then(results => {
+                    // Combine all downloaded files into one array
+                    const activities = results.flat();
+                    
+                    const allPolylines = [];
 
-            rawActivitiesCache.forEach(activity => {
-                // Skip if filtering by year and it doesn't match
-                if (targetYear !== "ALL" && String(activity.year) !== String(targetYear)) {
-                    return;
-                }
+                    activities.forEach(activity => {
+                        if (!activity.coordinates || activity.coordinates.length === 0) return;
 
-                // Ensure valid coordinates exist
-                if (!activity.coordinates || activity.coordinates.length === 0) {
-                    return;
-                }
+                        // Calculate tiles for the heatmap fill
+                        activity.coordinates.forEach(coord => {
+                            const latlng = L.latLng(coord[0], coord[1]);
+                            
+                            const p14 = map.project(latlng, 14);
+                            visitedTiles.add(`14_${Math.floor(p14.x / 256)}_${Math.floor(p14.y / 256)}`);
 
-                const config = getSportConfig(activity.type);
-                
-                // Create polyline from coordinates
-                const line = L.polyline(activity.coordinates, {
-                    color: config.color,
-                    weight: 3,
-                    opacity: 0.8
+                            const p17 = map.project(latlng, 17);
+                            visitedTiles.add(`17_${Math.floor(p17.x / 256)}_${Math.floor(p17.y / 256)}`);
+                        });
+
+                        // Draw the line
+                        const config = getSportConfig(activity.type);
+                        const line = L.polyline(activity.coordinates, {
+                            color: config.color,
+                            weight: 3,
+                            opacity: 0.8,
+                            smoothFactor: 0
+                        });
+
+                        line.bindPopup(`<a href="https://intervals.icu/activities/${activity.id}" target="_blank" style="color: #4da6ff; text-decoration: none;"><strong>${activity.name}</strong></a><br><small>${activity.type} | ${activity.year}</small>`);
+                        line.addTo(config.group);
+                        
+                        runningMapLines.push(line);
+                        allPolylines.push(line);
+                    });
+
+                    // Force the grid to redraw itself so it fills in the newly loaded visited tiles
+                    drawTileGrid(); 
+
+                    // Automatically zoom the map to fit the downloaded tracks
+                    if (allPolylines.length > 0) {
+                        const group = L.featureGroup(allPolylines);
+                        map.fitBounds(group.getBounds(), { padding: [50, 50] });
+                    }
                 });
-
-                line.bindPopup(`<a href="https://intervals.icu/activities/${activity.id}" target="_blank" style="color: #4da6ff; text-decoration: none;"><strong>${activity.name}</strong></a><br><small>${activity.type} | ${activity.year}</small>`);
-                line.addTo(config.group);
-                
-                runningMapLines.push(line);
-                allPolylines.push(line);
-            });
-
-            // Automatically zoom the map to fit all loaded activities
-            if (allPolylines.length > 0) {
-                const group = L.featureGroup(allPolylines);
-                map.fitBounds(group.getBounds(), { padding: [50, 50] });
-            }
         }
 
+        // 3. Connect the dropdown directly to the loader
         function filterMapByYear() {
-            drawTracks(document.getElementById('year-select').value);
+            loadData(document.getElementById('year-select').value);
         }
-        
+
         function drawTileGrid() {
             layers['Squadrats (z14)'].clearLayers();
             layers['Squadratinhos (z17)'].clearLayers();
