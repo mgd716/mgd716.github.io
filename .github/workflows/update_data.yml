@@ -11,10 +11,10 @@ jobs:
       contents: write # Grants the robot permission to push data updates back into your repo
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4.2.2 # Upgraded to resolve Node 20 deprecation warnings
+        uses: actions/checkout@v4
         
       - name: Setup Python
-        uses: actions/setup-python@v5.4.0 # Upgraded to resolve Node 20 deprecation warnings
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           
