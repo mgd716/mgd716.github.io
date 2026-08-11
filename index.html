@@ -41,7 +41,8 @@
             'Hikes': L.layerGroup().addTo(map),
             'Swims': L.layerGroup().addTo(map),
             'Other': L.layerGroup().addTo(map)
-            'Tile Grid': L.layerGroup().addTo(map)
+            'Squadrats (z14)': L.layerGroup().addTo(map),
+            'Squadratinhos (z17)': L.layerGroup() // Left off by default
         };
 
         L.control.layers(null, layers, { collapsed: false }).addTo(map);
@@ -124,45 +125,61 @@
         }
         
         function drawTileGrid() {
-            layers['Tile Grid'].clearLayers();
+            layers['Squadrats (z14)'].clearLayers();
+            layers['Squadratinhos (z17)'].clearLayers();
             
-            // RideEveryTile and VeloViewer use zoom level 14
-            const TILE_ZOOM = 14; 
-            
-            // Prevent browser crashes by only drawing the grid when zoomed in
-            if (map.getZoom() < 12) return;
-
+            const currentZoom = map.getZoom();
             const bounds = map.getBounds();
-            
-            // Project the screen's corners to zoom level 14 pixel coordinates
-            const nwPoint = map.project(bounds.getNorthWest(), TILE_ZOOM);
-            const sePoint = map.project(bounds.getSouthEast(), TILE_ZOOM);
 
-            // Leaflet map tiles are exactly 256x256 pixels
-            const minX = Math.floor(nwPoint.x / 256);
-            const maxX = Math.floor(sePoint.x / 256);
-            const minY = Math.floor(nwPoint.y / 256);
-            const maxY = Math.floor(sePoint.y / 256);
+            // Reusable function to calculate and draw any zoom level grid
+            function drawGrid(targetZoom, layerGroup, style, minZoomVisible) {
+                // Prevent browser crashes by hiding grids when zoomed out too far
+                if (currentZoom < minZoomVisible) return;
 
-            // Loop through the visible grid and draw rectangles
-            for (let x = minX; x <= maxX; x++) {
-                for (let y = minY; y <= maxY; y++) {
-                    // Unproject back to Latitude and Longitude to draw the box
-                    const tileNw = map.unproject(L.point(x * 256, y * 256), TILE_ZOOM);
-                    const tileSe = map.unproject(L.point((x + 1) * 256, (y + 1) * 256), TILE_ZOOM);
-                    
-                    L.rectangle(L.latLngBounds(tileNw, tileSe), {
-                        color: '#555',       // Dark grey lines
-                        weight: 1,           // Thin borders
-                        fillOpacity: 0,      // Transparent inside
-                        interactive: false   // Clicks pass through to your activities
-                    }).addTo(layers['Tile Grid']);
+                const nwPoint = map.project(bounds.getNorthWest(), targetZoom);
+                const sePoint = map.project(bounds.getSouthEast(), targetZoom);
+
+                const minX = Math.floor(nwPoint.x / 256);
+                const maxX = Math.floor(sePoint.x / 256);
+                const minY = Math.floor(nwPoint.y / 256);
+                const maxY = Math.floor(sePoint.y / 256);
+
+                // Hard safety limit: don't draw more than 4,000 rectangles at once
+                if ((maxX - minX) * (maxY - minY) > 4000) return;
+
+                for (let x = minX; x <= maxX; x++) {
+                    for (let y = minY; y <= maxY; y++) {
+                        const tileNw = map.unproject(L.point(x * 256, y * 256), targetZoom);
+                        const tileSe = map.unproject(L.point((x + 1) * 256, (y + 1) * 256), targetZoom);
+                        
+                        L.rectangle(L.latLngBounds(tileNw, tileSe), style).addTo(layerGroup);
+                    }
                 }
+            }
+
+            // Draw z14 (Squadrats) - Thick orange lines, visible when zoom >= 12
+            if (map.hasLayer(layers['Squadrats (z14)'])) {
+                drawGrid(14, layers['Squadrats (z14)'], {
+                    color: '#ff9900', 
+                    weight: 2,           
+                    fillOpacity: 0,      
+                    interactive: false   
+                }, 12);
+            }
+
+            // Draw z17 (Squadratinhos) - Thin grey lines, visible when zoom >= 15
+            if (map.hasLayer(layers['Squadratinhos (z17)'])) {
+                drawGrid(17, layers['Squadratinhos (z17)'], {
+                    color: '#777777', 
+                    weight: 1,           
+                    fillOpacity: 0,      
+                    interactive: false   
+                }, 15);
             }
         }
 
-        // Redraw the grid whenever the map is panned or zoomed
-        map.on('moveend', drawTileGrid);
+        // Redraw when the map moves OR when a user toggles a layer in the menu
+        map.on('moveend overlayadd overlayremove', drawTileGrid);
         
         // Trigger the first draw
         drawTileGrid();
