@@ -78,31 +78,43 @@
             })
             .catch(err => console.error("Error loading activities:", err));
 
-        function drawTracks(targetYear) {
+     function drawTracks(targetYear) {
             runningMapLines.forEach(line => line.remove());
             runningMapLines = [];
 
-            const boundsArray = [];
+            const allPolylines = [];
 
             rawActivitiesCache.forEach(activity => {
+                // Skip if filtering by year and it doesn't match
                 if (targetYear !== "ALL" && String(activity.year) !== String(targetYear)) {
                     return;
                 }
 
+                // Ensure valid coordinates exist
+                if (!activity.coordinates || activity.coordinates.length === 0) {
+                    return;
+                }
+
                 const config = getSportConfig(activity.type);
+                
+                // Create polyline from coordinates
                 const line = L.polyline(activity.coordinates, {
-                    color: config.color, weight: 2, opacity: 0.6
+                    color: config.color,
+                    weight: 3,
+                    opacity: 0.8
                 });
 
                 line.bindPopup(`<strong>${activity.name}</strong><br><small>${activity.type} | ${activity.year}</small>`);
                 line.addTo(config.group);
+                
                 runningMapLines.push(line);
-                boundsArray.push(line.getBounds());
+                allPolylines.push(line);
             });
 
-            if (boundsArray.length > 0) {
-                const featureGroup = L.featureGroup(runningMapLines);
-                map.fitBounds(featureGroup.getBounds(), { padding: [30, 30] });
+            // Automatically zoom the map to fit all loaded activities
+            if (allPolylines.length > 0) {
+                const group = L.featureGroup(allPolylines);
+                map.fitBounds(group.getBounds(), { padding: [50, 50] });
             }
         }
 
