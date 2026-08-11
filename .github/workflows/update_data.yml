@@ -32,7 +32,7 @@ jobs:
         run: |
           git config --global user.name "Map Bot"
           git config --global user.email "bot@github.com"
-          git add data.json
+          git add data_*.json years.json
           git commit -m "Auto-updated activity maps" || exit 0
           git pull --rebase origin main
           git push
