@@ -105,9 +105,9 @@ def main():
                 # Add to set if activity has no GPS (indoor trainer/gym) to avoid re-checking
                 existing_ids.add(act_id)
 
-        # Save data array out
+# Save data array out in a compressed format to save space
         with open(OUTPUT_FILE, "w") as f:
-            json.dump(map_data, f, indent=2)
+            json.dump(map_data, f, separators=(',', ':'))
             
         print(f"\nSuccess! Total tracks stored inside data.json: {len(map_data)}. New downloads: {new_downloads}")
         
