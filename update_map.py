@@ -48,7 +48,8 @@ def fetch_gps_stream(activity_id):
                     lngs = stream.get("data2", []) # Longitudes live inside data2
                     
                     if lats and lngs:
-                        return list(zip(lats, lngs))
+                        # Round to 5 decimal places and keep only every 4th point [::4]
+                        return [[round(lat, 5), round(lng, 5)] for lat, lng in zip(lats, lngs)][::4]
     except Exception:
         return None
     return None
