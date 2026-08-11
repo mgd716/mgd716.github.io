@@ -59,13 +59,31 @@
 
         let rawActivitiesCache = [];
         let runningMapLines = [];
+        const visitedTiles = new Set(); // Stores our completed squares
 
         fetch('./data.json')
             .then(response => response.json())
             .then(activities => {
                 rawActivitiesCache = activities;
 
-                // Extract and sort unique year strings for selector dropdown options
+                // Calculate visited tiles for every activity point
+                activities.forEach(activity => {
+                    if (!activity.coordinates) return;
+                    
+                    activity.coordinates.forEach(coord => {
+                        const latlng = L.latLng(coord[0], coord[1]);
+                        
+                        // Calculate z14 (Squadrat) tile
+                        const p14 = map.project(latlng, 14);
+                        visitedTiles.add(`14_${Math.floor(p14.x / 256)}_${Math.floor(p14.y / 256)}`);
+
+                        // Calculate z17 (Squadratinho) tile
+                        const p17 = map.project(latlng, 17);
+                        visitedTiles.add(`17_${Math.floor(p17.x / 256)}_${Math.floor(p17.y / 256)}`);
+                    });
+                });
+
+                // Extract and sort unique year strings...
                 const years = [...new Set(activities.map(a => a.year))].sort((a,b) => b - a);
                 const dropdown = document.getElementById('year-select');
                 years.forEach(year => {
@@ -152,7 +170,19 @@
                         const tileNw = map.unproject(L.point(x * 256, y * 256), targetZoom);
                         const tileSe = map.unproject(L.point((x + 1) * 256, (y + 1) * 256), targetZoom);
                         
-                        L.rectangle(L.latLngBounds(tileNw, tileSe), style).addTo(layerGroup);
+                        // Check if this specific tile exists in our visited list
+                        const tileKey = `${targetZoom}_${x}_${y}`;
+                        const isVisited = visitedTiles.has(tileKey);
+
+                        // Clone the base style so we don't accidentally overwrite it
+                        const currentStyle = Object.assign({}, style);
+                        
+                        if (isVisited) {
+                            currentStyle.fillColor = style.color; // Use the border color for the fill
+                            currentStyle.fillOpacity = 0.4;       // Fill it in!
+                        }
+                        
+                        L.rectangle(L.latLngBounds(tileNw, tileSe), currentStyle).addTo(layerGroup);
                     }
                 }
             }
