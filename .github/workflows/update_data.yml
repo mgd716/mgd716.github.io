@@ -34,4 +34,5 @@ jobs:
           git config --global user.email "bot@github.com"
           git add data.json
           git commit -m "Auto-updated activity maps" || exit 0
+          git pull --rebase origin main
           git push
