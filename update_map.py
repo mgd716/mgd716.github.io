@@ -19,7 +19,7 @@ def fetch_activities():
     
     params = {"oldest": "2026-01-01", "newest": "2030-01-01"}
     
-    response = requests.get(url, params=params, auth=HTTPBasicAuth('athlete', API_KEY))
+    response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
         raise Exception(f"Failed to fetch activities list: {response.status_code} - {response.text}")
     return response.json()
@@ -33,7 +33,7 @@ def fetch_gps_stream(activity_id):
     
     params = {"types": "latlng"}
     
-    response = requests.get(url, params=params, auth=HTTPBasicAuth('athlete', API_KEY))
+    response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
         return None
         
