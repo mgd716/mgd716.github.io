@@ -17,7 +17,7 @@ def fetch_activities():
     endpoint = f"api/v1/athlete/{ATHLETE_ID}/activities"
     url = base_url + endpoint
     
-    params = {"oldest": "2010-01-01", "newest": "2024-01-01"}
+    params = {"oldest": "2010-01-01", "newest": "2030-01-01"}
     
     response = requests.get(url, params=params, auth=HTTPBasicAuth('API_KEY', API_KEY))
     if response.status_code != 200:
