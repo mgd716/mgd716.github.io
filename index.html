@@ -41,6 +41,7 @@
             'Hikes': L.layerGroup().addTo(map),
             'Swims': L.layerGroup().addTo(map),
             'Other': L.layerGroup().addTo(map)
+            'Tile Grid': L.layerGroup().addTo(map)
         };
 
         L.control.layers(null, layers, { collapsed: false }).addTo(map);
@@ -121,6 +122,50 @@
         function filterMapByYear() {
             drawTracks(document.getElementById('year-select').value);
         }
+        
+        function drawTileGrid() {
+            layers['Tile Grid'].clearLayers();
+            
+            // RideEveryTile and VeloViewer use zoom level 14
+            const TILE_ZOOM = 14; 
+            
+            // Prevent browser crashes by only drawing the grid when zoomed in
+            if (map.getZoom() < 12) return;
+
+            const bounds = map.getBounds();
+            
+            // Project the screen's corners to zoom level 14 pixel coordinates
+            const nwPoint = map.project(bounds.getNorthWest(), TILE_ZOOM);
+            const sePoint = map.project(bounds.getSouthEast(), TILE_ZOOM);
+
+            // Leaflet map tiles are exactly 256x256 pixels
+            const minX = Math.floor(nwPoint.x / 256);
+            const maxX = Math.floor(sePoint.x / 256);
+            const minY = Math.floor(nwPoint.y / 256);
+            const maxY = Math.floor(sePoint.y / 256);
+
+            // Loop through the visible grid and draw rectangles
+            for (let x = minX; x <= maxX; x++) {
+                for (let y = minY; y <= maxY; y++) {
+                    // Unproject back to Latitude and Longitude to draw the box
+                    const tileNw = map.unproject(L.point(x * 256, y * 256), TILE_ZOOM);
+                    const tileSe = map.unproject(L.point((x + 1) * 256, (y + 1) * 256), TILE_ZOOM);
+                    
+                    L.rectangle(L.latLngBounds(tileNw, tileSe), {
+                        color: '#555',       // Dark grey lines
+                        weight: 1,           // Thin borders
+                        fillOpacity: 0,      // Transparent inside
+                        interactive: false   // Clicks pass through to your activities
+                    }).addTo(layers['Tile Grid']);
+                }
+            }
+        }
+
+        // Redraw the grid whenever the map is panned or zoomed
+        map.on('moveend', drawTileGrid);
+        
+        // Trigger the first draw
+        drawTileGrid();
     </script>
 </body>
 </html>
