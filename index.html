@@ -104,7 +104,7 @@
                     opacity: 0.8
                 });
 
-                line.bindPopup(`<strong>${activity.name}</strong><br><small>${activity.type} | ${activity.year}</small>`);
+                line.bindPopup(`<a href="https://intervals.icu/activities/${activity.id}" target="_blank" style="color: #4da6ff; text-decoration: none;"><strong>${activity.name}</strong></a><br><small>${activity.type} | ${activity.year}</small>`);
                 line.addTo(config.group);
                 
                 runningMapLines.push(line);
