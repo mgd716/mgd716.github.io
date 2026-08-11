@@ -1,43 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>My Permanent Map with Filters</title>
+    <title>My Personal Tracker Map</title>
     <link rel="stylesheet" href="https://unpkg.com" />
     <script src="https://unpkg.com"></script>
     <style>
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: Arial, sans-serif; background-color: #111; }
-        #map { height: 100vh; width: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
-        
-        #filter-sidebar {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(30, 30, 30, 0.9);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            z-index: 1000;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            max-width: 200px;
+        #map { height: 100vh; width: 100%; position: absolute; z-index: 1; }
+        #sidebar {
+            position: absolute; top: 20px; left: 20px; background: rgba(30, 30, 30, 0.9);
+            color: white; padding: 15px; border-radius: 8px; z-index: 1000;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); width: 160px;
         }
-        #filter-sidebar h3 { margin-top: 0; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
-        #year-select {
-            width: 100%;
-            padding: 8px;
-            background: #333;
-            color: white;
-            border: 1px solid #555;
-            border-radius: 4px;
-            cursor: pointer;
-        }
+        #year-select { width: 100%; padding: 8px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
         .leaflet-popup-content-wrapper { background: #222; color: #fff; border-radius: 4px; }
         .leaflet-popup-tip { background: #222; }
     </style>
 </head>
 <body>
 
-    <div id="filter-sidebar">
-        <h3>Filter by Year</h3>
+    <div id="sidebar">
+        <label style="font-weight:bold; display:block; margin-bottom:5px;">Filter by Year</label>
         <select id="year-select" onchange="filterMapByYear()">
             <option value="ALL">Show All Years</option>
         </select>
@@ -46,8 +29,6 @@
     <div id="map"></div>
 
     <script>
-        // FIXED: Added a universal fallback starting position [0, 0] and zoom level 2 
-        // This guarantees the dark map grid loads instantly on screen before checking files
         const map = L.map('map').setView([0, 0], 2);
 
         L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', {
@@ -80,21 +61,15 @@
         fetch('./data.json')
             .then(response => response.json())
             .then(activities => {
-                // Pre-process and clean data if years were saved as array lists
-                rawActivitiesCache = activities.map(act => {
-                    if (Array.isArray(act.year)) {
-                        act.year = act.year[0]; // Clean layout array down to a string
-                    }
-                    return act;
-                });
+                rawActivitiesCache = activities;
 
-                const years = [...new Set(rawActivitiesCache.map(a => a.year))].sort((a,b) => b - a);
+                // Extract and sort unique year strings for selector dropdown options
+                const years = [...new Set(activities.map(a => a.year))].sort((a,b) => b - a);
                 const dropdown = document.getElementById('year-select');
                 years.forEach(year => {
                     if(year && year !== "Unknown") {
                         const opt = document.createElement('option');
-                        opt.value = year;
-                        opt.textContent = year;
+                        opt.value = year; opt.textContent = year;
                         dropdown.appendChild(opt);
                     }
                 });
@@ -116,20 +91,15 @@
 
                 const config = getSportConfig(activity.type);
                 const line = L.polyline(activity.coordinates, {
-                    color: config.color,
-                    weight: 2,
-                    opacity: 0.6
+                    color: config.color, weight: 2, opacity: 0.6
                 });
 
-                const popupContent = `<strong>${activity.name}</strong><br><small>${activity.type} | ${activity.year}</small>`;
-                line.bindPopup(popupContent);
-
+                line.bindPopup(`<strong>${activity.name}</strong><br><small>${activity.type} | ${activity.year}</small>`);
                 line.addTo(config.group);
                 runningMapLines.push(line);
                 boundsArray.push(line.getBounds());
             });
 
-            // Adjust zoom dynamically only if tracks exist to prevent errors
             if (boundsArray.length > 0) {
                 const featureGroup = L.featureGroup(runningMapLines);
                 map.fitBounds(featureGroup.getBounds(), { padding: [30, 30] });
@@ -137,8 +107,7 @@
         }
 
         function filterMapByYear() {
-            const selectedYear = document.getElementById('year-select').value;
-            drawTracks(selectedYear);
+            drawTracks(document.getElementById('year-select').value);
         }
     </script>
 </body>
