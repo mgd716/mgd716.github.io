@@ -28,7 +28,7 @@ def fetch_gps_stream(activity_id):
     """Fetches time-series data using the official activities streams endpoint format."""
     # Hardcoded base path to guarantee slashes never get dropped or misplaced
     base_url = "https://intervals.icu/"
-    endpoint = f"api/v1/activity/{activity_id}/streams"
+    endpoint = f"api/v1/activity/{activity_id}/streams.json"
     url = base_url + endpoint
     
     params = {"types": "latlng"}
